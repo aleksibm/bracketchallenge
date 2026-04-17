@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bracket Forge</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero panel">
+        <div id="submission-lock-banner" class="submission-lock-banner">
+          <div>
+            <p class="eyebrow">Bracket Deadline</p>
+            <h2 id="submission-lock-countdown">Loading deadline...</h2>
+          </div>
+          <p id="submission-lock-copy" class="submission-lock-copy">
+            Checking when bracket submissions lock.
+          </p>
+        </div>
+
+        <div class="hero-dashboard">
+          <article class="hero-card">
+            <div class="hero-card-head">
+              <div>
+                <p class="eyebrow">Live Series Scores</p>
+                <h2>Current playoff scores</h2>
+              </div>
+              <p id="overview-updated" class="hero-card-meta">Waiting for the latest sync</p>
+            </div>
+            <div id="series-score-list" class="series-score-list">
+              <div class="hero-empty">Loading playoff series scores...</div>
+            </div>
+          </article>
+
+          <article class="hero-card">
+            <div class="hero-card-head">
+              <div>
+                <p class="eyebrow">Leaderboard</p>
+                <h2>Bracket points so far</h2>
+              </div>
+              <p class="hero-card-meta">All saved brackets ranked by points</p>
+            </div>
+            <div id="leaderboard-list" class="leaderboard-list">
+              <div class="hero-empty">Loading leaderboard...</div>
+            </div>
+          </article>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section id="auth-panel" class="panel auth-panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Account</p>
+              <h2 id="auth-heading">Create your account</h2>
+            </div>
+            <div class="auth-switch" role="tablist" aria-label="Authentication mode">
+              <button type="button" class="mode-pill is-active" data-auth-mode="register">
+                Create account
+              </button>
+              <button type="button" class="mode-pill" data-auth-mode="login">Sign in</button>
+            </div>
+          </div>
+
+          <form id="auth-form" class="auth-form">
+            <label class="input-group">
+              <span>Name</span>
+              <input
+                id="auth-name"
+                name="name"
+                type="text"
+                placeholder="Bracket boss"
+                autocomplete="username"
+                required
+              />
+            </label>
+            <label class="input-group">
+              <span>Password</span>
+              <input
+                id="auth-password"
+                name="password"
+                type="password"
+                placeholder="At least 8 characters"
+                autocomplete="current-password"
+                required
+              />
+            </label>
+            <button id="auth-submit" class="button button-primary" type="submit">
+              Create account
+            </button>
+          </form>
+
+          <p class="auth-note">
+            Accounts and saved brackets are stored on this server so you can log back in with
+            your name and password and revisit prior challenge runs later.
+          </p>
+        </section>
+
+        <section id="app-panel" class="app-panel" hidden>
+          <div class="panel control-panel">
+            <div class="section-head controls-head">
+              <div>
+                <p class="eyebrow">Front Office</p>
+                <h2>Welcome back, <span id="user-name">manager</span>.</h2>
+                <p id="challenge-summary" class="muted-text">
+                  Set a field, make your picks, and save the run to your history.
+                </p>
+              </div>
+              <div class="toolbar">
+                <button id="new-challenge-btn" class="button">New bracket</button>
+                <button id="save-challenge-btn" class="button button-primary">Save bracket</button>
+                <button id="logout-btn" class="button button-ghost">Log out</button>
+              </div>
+            </div>
+
+            <div class="control-grid">
+              <label class="input-group">
+                <span>Challenge title</span>
+                <input id="challenge-title" type="text" maxlength="80" />
+              </label>
+              <label class="input-group">
+                <span>Season label</span>
+                <input id="challenge-season" type="text" maxlength="80" />
+              </label>
+              <div class="quick-actions">
+                <button id="demo-field-btn" class="button">Reload 2026 field</button>
+                <button id="clear-field-btn" class="button button-ghost">Clear picks</button>
+              </div>
+            </div>
+
+            <article id="champion-card" class="champion-card">
+              <div>
+                <p class="eyebrow">Cup Favorite</p>
+                <h3 id="champion-name">No champion picked yet</h3>
+              </div>
+              <p id="champion-copy" class="muted-text">
+                Finish the bracket and your projected Stanley Cup winner lands here.
+              </p>
+            </article>
+          </div>
+
+          <div id="message-banner" class="message-banner" hidden></div>
+
+          <section class="panel bracket-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Bracket Board</p>
+                <h2>Pick the path to the Cup</h2>
+              </div>
+              <div class="bracket-panel-actions">
+                <p class="muted-text">
+                  Click winners as they advance, then save your bracket from here any time.
+                </p>
+                <button id="save-bracket-board-btn" class="button button-primary" type="button">
+                  Save bracket
+                </button>
+              </div>
+            </div>
+            <div id="bracket-columns" class="bracket-columns"></div>
+          </section>
+
+          <section class="panel history-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">History</p>
+                <h2>Saved challenge runs</h2>
+              </div>
+              <p class="muted-text">
+                Load an old bracket, remix it, or keep a record of every season you play.
+              </p>
+            </div>
+            <div id="history-list" class="history-list"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div id="leaderboard-viewer" class="leaderboard-viewer" hidden>
+      <div class="leaderboard-viewer-backdrop" data-close-viewer></div>
+      <section
+        class="leaderboard-viewer-dialog panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="leaderboard-viewer-title"
+      >
+        <div class="section-head leaderboard-viewer-head">
+          <div>
+            <p class="eyebrow">Bracket Reveal</p>
+            <h2 id="leaderboard-viewer-title">Submitted bracket</h2>
+          </div>
+          <button
+            id="leaderboard-viewer-close"
+            class="button button-ghost"
+            type="button"
+            aria-label="Close bracket viewer"
+          >
+            Close
+          </button>
+        </div>
+        <p id="leaderboard-viewer-summary" class="muted-text">
+          Open a locked-in leaderboard bracket to see the full tree here.
+        </p>
+        <div id="leaderboard-viewer-board" class="bracket-columns bracket-columns--viewer"></div>
+      </section>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
