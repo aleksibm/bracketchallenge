@@ -8,8 +8,7 @@
   </head>
   <body>
     <div class="page-shell">
-      <header class="hero panel">
-        <div id="submission-lock-banner" class="submission-lock-banner">
+      <div id="submission-lock-banner" class="submission-lock-banner">
           <div>
             <p class="eyebrow">Bracket Deadline</p>
             <h2 id="submission-lock-countdown">Loading deadline...</h2>
@@ -19,12 +18,25 @@
           </p>
         </div>
 
-        <div class="hero-dashboard">
-          <article class="hero-card">
+      <header class="top-board">
+          <article class="panel hero-card leaderboard-card">
             <div class="hero-card-head">
               <div>
-                <p class="eyebrow">Live Series Scores</p>
-                <h2>Current playoff scores</h2>
+                <p class="eyebrow">Leaderboard</p>
+                <h2>Current year</h2>
+              </div>
+              <p class="hero-card-meta">All-Time</p>
+            </div>
+            <div id="leaderboard-list" class="leaderboard-list">
+              <div class="hero-empty">Loading leaderboard...</div>
+            </div>
+          </article>
+
+          <article class="panel hero-card games-card">
+            <div class="hero-card-head">
+              <div>
+                <p class="eyebrow">Last games</p>
+                <h2>Recent results</h2>
               </div>
               <p id="overview-updated" class="hero-card-meta">Waiting for the latest sync</p>
             </div>
@@ -33,22 +45,6 @@
             </div>
           </article>
 
-          <article class="hero-card">
-            <div class="hero-card-head">
-              <div>
-                <p class="eyebrow">Leaderboard</p>
-                <h2>Bracket points so far</h2>
-              </div>
-              <p class="hero-card-meta">All saved brackets ranked by points</p>
-            </div>
-            <div id="leaderboard-list" class="leaderboard-list">
-              <div class="hero-empty">Loading leaderboard...</div>
-            </div>
-          </article>
-        </div>
-      </header>
-
-      <main class="layout">
         <section id="auth-panel" class="panel auth-panel">
           <div class="section-head">
             <div>
@@ -101,7 +97,7 @@
           <div class="panel control-panel">
             <div class="section-head controls-head">
               <div>
-                <p class="eyebrow">Front Office</p>
+                <p class="eyebrow">Account</p>
                 <h2>Welcome back, <span id="user-name">manager</span>.</h2>
                 <p id="challenge-summary" class="muted-text">
                   Set a field, make your picks, and save the run to your history.
@@ -110,6 +106,15 @@
               <div class="toolbar">
                 <button id="new-challenge-btn" class="button">New bracket</button>
                 <button id="save-challenge-btn" class="button button-primary">Save bracket</button>
+                <button
+                  id="challenge-history-btn"
+                  class="button"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="history-panel"
+                >
+                  Challenge History
+                </button>
                 <button id="logout-btn" class="button button-ghost">Log out</button>
               </div>
             </div>
@@ -160,7 +165,7 @@
             <div id="bracket-columns" class="bracket-columns"></div>
           </section>
 
-          <section class="panel history-panel">
+          <section id="history-panel" class="panel history-panel" hidden>
             <div class="section-head">
               <div>
                 <p class="eyebrow">History</p>
@@ -173,7 +178,7 @@
             <div id="history-list" class="history-list"></div>
           </section>
         </section>
-      </main>
+      </header>
     </div>
 
     <div id="leaderboard-viewer" class="leaderboard-viewer" hidden>

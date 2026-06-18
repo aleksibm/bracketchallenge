@@ -519,6 +519,7 @@ function publicUser(user) {
 
 function publicPlayoffOverview(db) {
   const playoffState = sanitizePlayoffState(db.playoffState);
+  const leaderboard = buildLeaderboard(db.challenges, db.users, playoffState);
 
   return {
     season: playoffState.season,
@@ -527,7 +528,9 @@ function publicPlayoffOverview(db) {
     submissionLockLabel: PLAYOFF_SUBMISSION_LOCK_LABEL,
     isSubmissionLocked: isSubmissionLocked(),
     seriesScores: playoffState.seriesScores,
-    leaderboard: buildLeaderboard(db.challenges, db.users, playoffState)
+    leaderboard: leaderboard.currentYear,
+    currentYearLeaderboard: leaderboard.currentYear,
+    allTimeLeaderboard: leaderboard.allTime
   };
 }
 
@@ -862,8 +865,10 @@ function buildLeaderboard(challenges, users, playoffState = createEmptyPlayoffSt
   const userById = new Map(
     Array.isArray(users) ? users.map((user) => [user?.id, publicUser(user)]) : []
   );
+  const season = Number.isFinite(playoffState.season) ? playoffState.season : PLAYOFF_YEAR;
+  const allTimeByUserId = new Map();
 
-  return (Array.isArray(challenges) ? challenges : [])
+  const scoredChallenges = (Array.isArray(challenges) ? challenges : [])
     .filter((challenge) => hasAssignedPlayoffField(challenge?.bracket))
     .map((challenge) => {
       const score = scoreChallenge(challenge.bracket, playoffState.officialBracket);
@@ -871,6 +876,7 @@ function buildLeaderboard(challenges, users, playoffState = createEmptyPlayoffSt
 
       return {
         id: challenge.id,
+        userId: challenge.userId,
         title: challenge.title,
         season: challenge.season,
         userName: owner?.name ?? "Unknown user",
@@ -880,8 +886,44 @@ function buildLeaderboard(challenges, users, playoffState = createEmptyPlayoffSt
         updatedAt: challenge.updatedAt,
         champion: challenge.champion ?? null
       };
-    })
-    .sort(compareLeaderboardEntries);
+    });
+
+  for (const entry of scoredChallenges) {
+    const accountId = entry.userId ?? entry.userName;
+    const current = allTimeByUserId.get(accountId) ?? {
+      id: accountId,
+      userName: entry.userName,
+      points: 0,
+      correctPicks: 0,
+      availablePoints: 0,
+      bracketCount: 0,
+      updatedAt: entry.updatedAt
+    };
+
+    current.points += entry.points;
+    current.correctPicks += entry.correctPicks;
+    current.availablePoints += entry.availablePoints;
+    current.bracketCount += 1;
+
+    if (String(entry.updatedAt ?? "").localeCompare(String(current.updatedAt ?? "")) > 0) {
+      current.updatedAt = entry.updatedAt;
+    }
+
+    allTimeByUserId.set(accountId, current);
+  }
+
+  const currentYear = scoredChallenges
+    .filter((entry) => getChallengeSeasonYear(entry) === season)
+    .sort(compareLeaderboardEntries)
+    .slice(0, 5);
+  const allTime = [...allTimeByUserId.values()]
+    .sort(compareAllTimeLeaderboardEntries)
+    .slice(0, 5);
+
+  return {
+    currentYear,
+    allTime
+  };
 }
 
 function compareLeaderboardEntries(left, right) {
@@ -894,6 +936,38 @@ function compareLeaderboardEntries(left, right) {
   }
 
   return String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? ""));
+}
+
+function compareAllTimeLeaderboardEntries(left, right) {
+  if (right.points !== left.points) {
+    return right.points - left.points;
+  }
+
+  if (right.correctPicks !== left.correctPicks) {
+    return right.correctPicks - left.correctPicks;
+  }
+
+  if (right.bracketCount !== left.bracketCount) {
+    return right.bracketCount - left.bracketCount;
+  }
+
+  return String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? ""));
+}
+
+function getChallengeSeasonYear(challenge) {
+  for (const value of [challenge?.season, challenge?.title, challenge?.createdAt]) {
+    if (typeof value !== "string") {
+      continue;
+    }
+
+    const match = value.match(/\b(20\d{2})\b/);
+
+    if (match) {
+      return Number.parseInt(match[1], 10);
+    }
+  }
+
+  return PLAYOFF_YEAR;
 }
 
 function hasAssignedPlayoffField(bracket) {

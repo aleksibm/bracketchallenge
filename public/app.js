@@ -114,6 +114,7 @@ const state = {
   overview: createOverviewState(),
   leaderboardViewer: createBracketViewerState(),
   current: createChallengeDraft(),
+  historyOpen: false,
   message: null
 };
 
@@ -144,11 +145,13 @@ const refs = {
   championName: document.querySelector("#champion-name"),
   championCopy: document.querySelector("#champion-copy"),
   bracketColumns: document.querySelector("#bracket-columns"),
+  historyPanel: document.querySelector("#history-panel"),
   historyList: document.querySelector("#history-list"),
   messageBanner: document.querySelector("#message-banner"),
   saveChallengeBtn: document.querySelector("#save-challenge-btn"),
   saveBracketBoardBtn: document.querySelector("#save-bracket-board-btn"),
   newChallengeBtn: document.querySelector("#new-challenge-btn"),
+  challengeHistoryBtn: document.querySelector("#challenge-history-btn"),
   demoFieldBtn: document.querySelector("#demo-field-btn"),
   clearFieldBtn: document.querySelector("#clear-field-btn"),
   logoutBtn: document.querySelector("#logout-btn")
@@ -223,9 +226,20 @@ function bindEvents() {
       return;
     }
 
-    state.current = createChallengeDraft();
+    state.current = createChallengeDraft(createPlayoffBracketFromSeriesScores(state.overview.seriesScores));
     setMessage("Started a fresh bracket.", "success");
     render();
+  });
+
+  refs.challengeHistoryBtn.addEventListener("click", () => {
+    state.historyOpen = !state.historyOpen;
+    render();
+
+    if (state.historyOpen) {
+      requestAnimationFrame(() => {
+        refs.historyPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
   });
 
   refs.demoFieldBtn.addEventListener("click", () => {
@@ -271,23 +285,42 @@ function bindEvents() {
   });
 
   refs.historyList.addEventListener("click", (event) => {
-    const target = event.target instanceof HTMLElement ? event.target.closest("button") : null;
+    const target = event.target instanceof HTMLElement ? event.target : null;
 
     if (!target) {
       return;
     }
 
-    const loadId = target.getAttribute("data-load-id");
-    const deleteId = target.getAttribute("data-delete-id");
-
-    if (loadId) {
-      loadChallenge(loadId);
-      return;
-    }
+    const deleteButton = target.closest("[data-delete-id]");
+    const deleteId = deleteButton?.getAttribute("data-delete-id");
 
     if (deleteId) {
       void deleteChallenge(deleteId);
+      return;
     }
+
+    const historyCard = target.closest("[data-load-id]");
+    const loadId = historyCard?.getAttribute("data-load-id");
+
+    if (loadId) {
+      loadChallenge(loadId);
+    }
+  });
+
+  refs.historyList.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    const target = event.target instanceof HTMLElement ? event.target.closest("[data-load-id]") : null;
+    const loadId = target?.getAttribute("data-load-id");
+
+    if (!loadId) {
+      return;
+    }
+
+    event.preventDefault();
+    loadChallenge(loadId);
   });
 
   refs.leaderboardViewer.addEventListener("click", (event) => {
@@ -367,6 +400,7 @@ async function logout() {
     state.challenges = [];
     state.leaderboardViewer = createBracketViewerState();
     state.current = createChallengeDraft();
+    state.historyOpen = false;
     setMessage("Logged out. Your saved brackets are still waiting the next time you sign in.", "success");
     render();
   } catch (error) {
@@ -389,7 +423,7 @@ async function refreshChallenges(autoload = false) {
     state.current =
       latestChallenge && hasAssignedPlayoffField(latestChallenge.bracket)
         ? normalizeChallenge(latestChallenge)
-        : createChallengeDraft();
+        : createChallengeDraft(createPlayoffBracketFromSeriesScores(state.overview.seriesScores));
   }
 }
 
@@ -441,6 +475,7 @@ function loadChallenge(challengeId) {
   }
 
   state.current = normalizeChallenge(challenge);
+  state.historyOpen = false;
   setMessage(`Loaded "${challenge.title}".`, "success");
   render();
 }
@@ -464,7 +499,10 @@ async function deleteChallenge(challengeId) {
     await loadOverview();
 
     if (state.current.id === challengeId) {
-      state.current = state.challenges.length > 0 ? normalizeChallenge(state.challenges[0]) : createChallengeDraft();
+      state.current =
+        state.challenges.length > 0
+          ? normalizeChallenge(state.challenges[0])
+          : createChallengeDraft(createPlayoffBracketFromSeriesScores(state.overview.seriesScores));
     }
 
     setMessage("Saved bracket removed from history.", "success");
@@ -518,10 +556,16 @@ function render() {
     renderChallengeSummary();
     renderChampion();
     renderBracket();
+    renderHistoryVisibility();
     renderHistory();
   }
 
   renderMessage();
+}
+
+function renderHistoryVisibility() {
+  refs.historyPanel.hidden = !state.historyOpen;
+  refs.challengeHistoryBtn.setAttribute("aria-expanded", String(state.historyOpen));
 }
 
 function renderAuthMode() {
@@ -563,17 +607,39 @@ function renderOverview() {
     return;
   }
 
+  const activeSeriesScores = state.overview.seriesScores.filter((series) => !series.winner);
+
   if (state.overview.seriesScores.length === 0) {
     refs.seriesScoreList.innerHTML = `<div class="hero-empty">No playoff series scores are available yet.</div>`;
+  } else if (activeSeriesScores.length === 0) {
+    refs.seriesScoreList.innerHTML = renderChampionResult();
   } else {
-    refs.seriesScoreList.innerHTML = state.overview.seriesScores.map(renderSeriesScoreRow).join("");
+    refs.seriesScoreList.innerHTML = activeSeriesScores.map(renderSeriesScoreRow).join("");
   }
 
-  if (state.overview.leaderboard.length === 0) {
-    refs.leaderboardList.innerHTML = `<div class="hero-empty">No saved brackets on the board yet.</div>`;
-  } else {
-    refs.leaderboardList.innerHTML = state.overview.leaderboard.map(renderLeaderboardRow).join("");
-  }
+  renderLeaderboardLists();
+}
+
+function renderLeaderboardLists() {
+  const currentYearRows =
+    state.overview.currentYearLeaderboard.length === 0
+      ? '<div class="hero-empty">No current playoff brackets yet.</div>'
+      : state.overview.currentYearLeaderboard.map(renderLeaderboardRow).join("");
+  const allTimeRows =
+    state.overview.allTimeLeaderboard.length === 0
+      ? '<div class="hero-empty">No account totals yet.</div>'
+      : state.overview.allTimeLeaderboard.map(renderAllTimeLeaderboardRow).join("");
+
+  refs.leaderboardList.innerHTML = `
+    <section class="leaderboard-section" aria-label="Current playoff top five brackets">
+      <h3 class="leaderboard-section-title">Top 5 brackets</h3>
+      ${currentYearRows}
+    </section>
+    <section class="leaderboard-section" aria-label="All-time account points">
+      <h3 class="leaderboard-section-title">Most total points</h3>
+      ${allTimeRows}
+    </section>
+  `;
 }
 
 async function openLeaderboardBracket(challengeId) {
@@ -757,17 +823,28 @@ function formatCountdown(milliseconds) {
 }
 
 function renderSeriesScoreRow(series) {
-  const statusCopy = series.winner ? `${series.winner} clinched the series` : "Series in progress";
-
   return `
-    <article class="series-score-row${series.winner ? " is-complete" : ""}">
+    <article class="series-score-row">
       <div class="series-score-copy">
         <span class="series-score-label">${escapeHtml(series.label)}</span>
         <strong class="series-score-line">
-          ${escapeHtml(`${series.topTeam} - ${series.bottomTeam} ${series.topWins}-${series.bottomWins}`)}
+          ${escapeHtml(`${series.topTeam} vs ${series.bottomTeam} ${series.topWins}-${series.bottomWins}`)}
         </strong>
       </div>
-      <span class="series-score-status">${escapeHtml(statusCopy)}</span>
+      <span class="series-score-status">Series active</span>
+    </article>
+  `;
+}
+
+function renderChampionResult() {
+  const finalSeries = state.overview.seriesScores.find((series) => series.seriesId === "final");
+  const champion = TEAM_BY_ID[finalSeries?.winner];
+  const championName = champion?.name ?? finalSeries?.winner ?? "TBD";
+
+  return `
+    <article class="series-score-row champion-result">
+      <span class="series-score-status">No active series</span>
+      <strong class="series-score-line">${escapeHtml(`Champions: ${championName}`)}</strong>
     </article>
   `;
 }
@@ -803,6 +880,25 @@ function renderLeaderboardRow(entry, index) {
   return `
     <article class="${rowClasses}">
       ${rowMarkup}
+    </article>
+  `;
+}
+
+function renderAllTimeLeaderboardRow(entry, index) {
+  const isCurrentUser = state.session && entry.userName === state.session.name;
+  const bracketCopy = `${entry.bracketCount} ${entry.bracketCount === 1 ? "bracket" : "brackets"}`;
+
+  return `
+    <article class="leaderboard-row leaderboard-row--account${isCurrentUser ? " is-current-user" : ""}">
+      <div class="leaderboard-rank">${index + 1}</div>
+      <div class="leaderboard-copy">
+        <strong>${escapeHtml(entry.userName)}</strong>
+        <span>${escapeHtml(bracketCopy)}</span>
+      </div>
+      <div class="leaderboard-points">
+        <strong>${escapeHtml(`${entry.points} pts`)}</strong>
+        <span>${escapeHtml(formatCorrectPickCount(entry.correctPicks))}</span>
+      </div>
     </article>
   `;
 }
@@ -1091,18 +1187,20 @@ function renderPickTile(seriesId, teamId, winnerId, fallbackLabel, options = {})
   const team = TEAM_BY_ID[teamId];
   const interactive = Boolean(options.interactive);
   const locked = !interactive;
+  const selected = winnerId === teamId;
+  const resultClass = selected ? getPickResultClass(seriesId, teamId) : "";
   const helperText = interactive
-    ? winnerId === teamId
-      ? "Selected to advance"
+    ? selected
+      ? getPickResultLabel(seriesId, teamId) ?? "Selected to advance"
       : "Click to advance"
-    : winnerId === teamId
-      ? "Submitted pick"
+    : selected
+      ? getPickResultLabel(seriesId, teamId) ?? "Submitted pick"
       : "Bracket locked";
 
   return `
     <button
       type="button"
-      class="pick-tile${winnerId === teamId ? " is-selected" : ""}${locked ? " is-locked" : ""}"
+      class="pick-tile${selected ? " is-selected" : ""}${resultClass ? ` ${resultClass}` : ""}${locked ? " is-locked" : ""}"
       data-series="${seriesId}"
       data-pick="${team.id}"
       aria-label="${escapeHtml(`${team.name}. ${helperText}`)}"
@@ -1116,6 +1214,30 @@ function renderPickTile(seriesId, teamId, winnerId, fallbackLabel, options = {})
       <span class="pick-helper">${helperText}</span>
     </button>
   `;
+}
+
+function getPickResultClass(seriesId, teamId) {
+  const officialWinner = getOfficialSeriesWinner(seriesId);
+
+  if (!officialWinner) {
+    return "";
+  }
+
+  return officialWinner === teamId ? "is-result-correct" : "is-result-miss";
+}
+
+function getPickResultLabel(seriesId, teamId) {
+  const officialWinner = getOfficialSeriesWinner(seriesId);
+
+  if (!officialWinner) {
+    return null;
+  }
+
+  return officialWinner === teamId ? "Correct pick" : "Missed pick";
+}
+
+function getOfficialSeriesWinner(seriesId) {
+  return state.overview.seriesScores.find((series) => series.seriesId === seriesId)?.winner ?? null;
 }
 
 function renderTeamLogo(team, className = "team-logo") {
@@ -1155,7 +1277,12 @@ function renderHistory() {
 
       return `
         <article class="history-card${currentClass}">
-          <div class="history-copy">
+          <button
+            class="history-load-card"
+            type="button"
+            data-load-id="${escapeHtml(challenge.id)}"
+            aria-label="${escapeHtml(`Load ${challenge.title}`)}"
+          >
             <p class="eyebrow">Saved bracket</p>
             <h3>${escapeHtml(challenge.title)}</h3>
             <p>${escapeHtml(challenge.season)}</p>
@@ -1167,9 +1294,8 @@ function renderHistory() {
               <span>${escapeHtml(resultsStatus)}</span>
               <span>Updated ${escapeHtml(dateFormatter.format(new Date(challenge.updatedAt)))}</span>
             </div>
-          </div>
+          </button>
           <div class="history-actions">
-            <button class="button" type="button" data-load-id="${challenge.id}">Load</button>
             <button class="button button-ghost" type="button" data-delete-id="${challenge.id}">Delete</button>
           </div>
         </article>
@@ -1208,6 +1334,8 @@ function createOverviewState() {
     isSubmissionLocked: false,
     seriesScores: [],
     leaderboard: [],
+    currentYearLeaderboard: [],
+    allTimeLeaderboard: [],
     error: null,
     loading: true
   };
@@ -1245,8 +1373,19 @@ function normalizeOverviewPayload(payload) {
           }))
           .filter((series) => series.seriesId && series.topTeam && series.bottomTeam)
       : current.seriesScores,
-    leaderboard: Array.isArray(payload?.leaderboard)
-      ? payload.leaderboard.map((entry) => ({
+    leaderboard: normalizeChallengeLeaderboardEntries(payload?.leaderboard),
+    currentYearLeaderboard: Array.isArray(payload?.currentYearLeaderboard)
+      ? normalizeChallengeLeaderboardEntries(payload.currentYearLeaderboard)
+      : normalizeChallengeLeaderboardEntries(payload?.leaderboard),
+    allTimeLeaderboard: normalizeAllTimeLeaderboardEntries(payload?.allTimeLeaderboard),
+    error: null,
+    loading: false
+  };
+}
+
+function normalizeChallengeLeaderboardEntries(entries) {
+  return Array.isArray(entries)
+    ? entries.map((entry) => ({
           id: typeof entry?.id === "string" ? entry.id : "",
           title: typeof entry?.title === "string" ? entry.title : "Saved bracket",
           userName: typeof entry?.userName === "string" ? entry.userName : "Unknown user",
@@ -1254,13 +1393,23 @@ function normalizeOverviewPayload(payload) {
           correctPicks: Number.isFinite(entry?.correctPicks) ? entry.correctPicks : 0,
           availablePoints: Number.isFinite(entry?.availablePoints) ? entry.availablePoints : 0
         }))
-      : current.leaderboard,
-    error: null,
-    loading: false
-  };
+    : [];
 }
 
-function createChallengeDraft() {
+function normalizeAllTimeLeaderboardEntries(entries) {
+  return Array.isArray(entries)
+    ? entries.map((entry) => ({
+        id: typeof entry?.id === "string" ? entry.id : "",
+        userName: typeof entry?.userName === "string" ? entry.userName : "Unknown user",
+        points: Number.isFinite(entry?.points) ? entry.points : 0,
+        correctPicks: Number.isFinite(entry?.correctPicks) ? entry.correctPicks : 0,
+        availablePoints: Number.isFinite(entry?.availablePoints) ? entry.availablePoints : 0,
+        bracketCount: Number.isFinite(entry?.bracketCount) ? entry.bracketCount : 0
+      }))
+    : [];
+}
+
+function createChallengeDraft(bracket = createPlayoffBracket()) {
   const year = new Date().getFullYear();
 
   return {
@@ -1276,7 +1425,7 @@ function createChallengeDraft() {
     scoredSeries: [],
     resultsUpdatedAt: null,
     scoreIsSaved: false,
-    bracket: createPlayoffBracket()
+    bracket: sanitizeBracket(bracket)
   };
 }
 
@@ -1353,6 +1502,37 @@ function createPlayoffBracket() {
 
   for (const [seriesId, teams] of Object.entries(PLAYOFF_FIELD_2026)) {
     bracket.series[seriesId].teams = [...teams];
+  }
+
+  return sanitizeBracket(bracket);
+}
+
+function createPlayoffBracketFromSeriesScores(seriesScores) {
+  const bracket = createPlayoffBracket();
+
+  if (!Array.isArray(seriesScores) || seriesScores.length === 0) {
+    return bracket;
+  }
+
+  for (const series of seriesScores) {
+    if (!series || !ALL_SERIES.includes(series.seriesId)) {
+      continue;
+    }
+
+    if (ROUND_ONE_SERIES.includes(series.seriesId)) {
+      const topTeam = normalizeTeamId(series.topTeam);
+      const bottomTeam = normalizeTeamId(series.bottomTeam);
+
+      if (topTeam && bottomTeam && topTeam !== bottomTeam) {
+        bracket.series[series.seriesId].teams = [topTeam, bottomTeam];
+      }
+    }
+
+    const winner = normalizeTeamId(series.winner);
+
+    if (winner) {
+      bracket.series[series.seriesId].winner = winner;
+    }
   }
 
   return sanitizeBracket(bracket);
